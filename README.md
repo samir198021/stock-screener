@@ -30,6 +30,18 @@ If 8501 is taken: `streamlit run app.py --server.port 8600`.
 - Pick **Market**, tweak the **filters**, and toggle **Auto-refresh** (30/60/120/300s) in the sidebar.
 - **Rescan now** forces an immediate refetch.
 
+## Morning routine (≈9:10 AM IST)
+NSE opens at **9:15**. At 9:10 you're in pre-open — barely any volume has traded, so a *live* scan
+is meaningless that early. Instead:
+1. Open the app at ~9:10 with the **Yahoo** source (India). It screens **yesterday's close** →
+   this is **today's watchlist**.
+2. Read the **Signal** column (🟢/🟡/🔴) and **Conviction** — 🟢 Strong = look first.
+3. At the **9:15 open**, watch those names live (Chartink source becomes meaningful ~30 min in),
+   confirm the chart, set a stop-loss, then decide. The app shows a live IST clock + a session
+   banner that tells you which mode you're in.
+
+This is a watchlist/idea tool — **not** buy/sell advice.
+
 ## Notes
 - Data is Yahoo-delayed (~15 min) — "near real-time," not tick data.
 - Rate limits: one batched price request per refresh + hourly-cached fundamentals. See `CLAUDE.md`.
