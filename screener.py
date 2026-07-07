@@ -139,6 +139,11 @@ def compute_metrics(ticker: str, hist: pd.DataFrame, fundamentals):
         if ma200 > 0:
             vs_200dma = (price - ma200) / ma200 * 100.0
 
+    # Trend direction from moving-average alignment (the classic "is it really trending up" read).
+    ma20 = float(close.rolling(20).mean().iloc[-1]) if len(close) >= 20 else np.nan
+    ma50 = float(close.rolling(50).mean().iloc[-1]) if len(close) >= 50 else np.nan
+    trend = _trend(price, ma20, ma50)
+
     return {
         "ticker": ticker,
         "price": price,
@@ -148,8 +153,23 @@ def compute_metrics(ticker: str, hist: pd.DataFrame, fundamentals):
         "sector": sector,
         "range52": range52,
         "vs_200dma": vs_200dma,
+        "trend": trend,
         "chart": "https://finance.yahoo.com/quote/" + ticker,
     }
+
+
+def _trend(price, ma20, ma50):
+    """Plain-English trend from price vs its 20- and 50-day averages.
+    ⬆️ Uptrend = price above both, 20 above 50 (aligned up). ⬇️ Fading = below both."""
+    if np.isnan(ma20) or np.isnan(ma50):
+        return "—"
+    if price > ma20 and ma20 > ma50:
+        return "⬆️ Uptrend"
+    if price > ma20:
+        return "↗️ Turning up"
+    if price < ma20 and price < ma50:
+        return "⬇️ Fading"
+    return "➡️ Pausing"
 
 
 def scan_universe(tickers, history, fundamentals_fetcher,

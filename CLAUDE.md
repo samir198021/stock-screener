@@ -19,7 +19,8 @@ above 200-DMA, upper half of 52-week range, RSI>=60, volume>=2x, P/E<=15), with 
 score breaking ties. A stock can pass the 3 filters yet have low conviction (e.g. a bounce in a
 downtrend), so this column separates strong setups from weak ones.
 
-Output columns: rank, ticker, sector, current price, P/E, volume ratio, RSI,
+Output columns: rank, ticker, **Signal** (🟢/🟡/🔴/🟠), **Trend** (⬆️ Uptrend / ↗️ Turning up /
+➡️ Pausing / ⬇️ Fading, from 20/50-DMA alignment), sector, current price, P/E, volume ratio, RSI,
 52-week range position, % vs 200-day MA, conviction, score, and a chart link.
 The extra columns are research aids (not part of the filter) to speed up due diligence.
 History is fetched over 1 year so the 52-week range and 200-day MA can be computed.
