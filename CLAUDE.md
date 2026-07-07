@@ -24,9 +24,11 @@ Output columns: rank, ticker, sector, current price, P/E, volume ratio, RSI,
 The extra columns are research aids (not part of the filter) to speed up due diligence.
 History is fetched over 1 year so the 52-week range and 200-day MA can be computed.
 
-## Universe (currently capped at 50 per market)
-- **India (NSE)** — top 50 of the Nifty 500 (i.e. the Nifty 50), Yahoo suffix `.NS`. Only this
-  market has the near-live Chartink path.
+## Universe
+- **India (NSE)** — the **full Nifty 500** (from `nifty500.py`, auto-generated from NSE's official
+  CSV), Yahoo suffix `.NS`. Only this market has the near-live Chartink path. The Yahoo path uses
+  `screener.scan_universe` — a two-stage scan (technicals for all 500 from one batched download,
+  then fundamentals only for the survivors) so it doesn't make 500 slow per-stock calls.
 - **India (BSE)** — 48 BSE large-caps (dual-listed with NSE), Yahoo suffix `.BO`, Yahoo-only
   (delayed). `LTIM.BO`/`TATAMOTORS.BO` omitted (not on Yahoo's BSE feed).
 - **US** — top 50 of the S&P 500 by weight. NOTE: the S&P 500 spans NYSE **and** Nasdaq;
@@ -43,8 +45,13 @@ stock-screener/
 ├── universe.py        ticker lists + get_universe(market)
 ├── screener.py        pure logic: fetch, RSI, volume ratio, P/E, screen, rank (NO streamlit)
 ├── chartink.py        near-live NSE scan via Chartink's unofficial endpoint (best-effort)
+├── nifty500.py        full Nifty 500 ticker list (auto-generated from NSE CSV)
+├── morning_digest.py  sends the NSE Strong watchlist to Telegram (run by the GitHub Action)
+├── .github/workflows/morning-digest.yml   cron: 09:10 IST Mon-Fri (+ manual dispatch)
 └── app.py             Streamlit UI + cached network wrappers (port 8501)
 ```
+
+Telegram digest secrets (GitHub repo → Settings → Secrets → Actions): `TELEGRAM_TOKEN`, `TELEGRAM_CHAT_ID`.
 
 ## Data sources (India can pick; US is Yahoo-only)
 - **Yahoo (default for US, optional for India):** ~15 min delayed, but always available.

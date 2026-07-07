@@ -13,16 +13,16 @@ import requests
 import screener
 from universe import get_universe
 
-NSE = "India (Nifty 500 — top 50)"
+NSE = "India (NSE Nifty 500)"
 IST = timezone(timedelta(hours=5, minutes=30))
 
 
 def build_result():
     tickers, _ = get_universe(NSE)
     history = screener.fetch_price_history(tickers, period="1y")
-    funds = screener.fetch_fundamentals(tickers)
-    metrics = [screener.compute_metrics(t, history.get(t), funds.get(t)) for t in tickers]
-    return screener.screen_and_rank(metrics)  # default filters: P/E<20, vol>1.5x, RSI>50
+    # Two-stage scan over all 500: technicals for all, fundamentals only for survivors.
+    result, _ = screener.scan_universe(tickers, history, screener.fetch_fundamentals)
+    return result  # default filters: P/E<20, vol>1.5x, RSI>50
 
 
 def _name(ticker):

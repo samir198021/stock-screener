@@ -152,6 +152,37 @@ def compute_metrics(ticker: str, hist: pd.DataFrame, fundamentals):
     }
 
 
+def scan_universe(tickers, history, fundamentals_fetcher,
+                  pe_max=PE_MAX, vol_mult=VOLUME_MULTIPLE, rsi_min=RSI_MIN):
+    """Efficient two-stage scan for large universes (e.g. Nifty 500).
+
+    Stage 1: compute technicals (RSI, volume ratio, 52w, 200-DMA) for every ticker from the
+             already-downloaded `history` — no network.
+    Stage 2: keep only names passing the RSI + volume filters, then fetch fundamentals
+             (P/E, sector) ONLY for those survivors via `fundamentals_fetcher(list_of_tickers)`.
+             This turns ~500 slow per-stock fundamental calls into just a handful.
+    Returns (ranked_dataframe, scanned_count).
+    """
+    base = []
+    for t in tickers:
+        m = compute_metrics(t, history.get(t), None)  # technicals only (pe=None)
+        if m:
+            base.append(m)
+
+    survivors = [m for m in base if m["rsi"] > rsi_min and m["volume_ratio"] > vol_mult]
+    if survivors:
+        funds = fundamentals_fetcher([m["ticker"] for m in survivors]) or {}
+        for m in survivors:
+            f = funds.get(m["ticker"]) or {}
+            eps = f.get("eps")
+            m["sector"] = f.get("sector") or "—"
+            if eps and eps > 0:
+                m["pe"] = m["price"] / float(eps)
+
+    result = screen_and_rank(survivors, pe_max, vol_mult, rsi_min)
+    return result, len(base)
+
+
 def _normalize(s: pd.Series) -> pd.Series:
     """Min-max normalize to [0,1]; if all values are equal, everyone scores 1.0."""
     rng = s.max() - s.min()

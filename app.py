@@ -13,7 +13,7 @@ import chartink
 import screener
 from universe import MARKETS, get_universe
 
-INDIA_LABEL = "India (Nifty 500 — top 50)"
+INDIA_LABEL = "India (NSE Nifty 500)"
 
 st.set_page_config(page_title="Stock Screener", page_icon="📈", layout="wide")
 
@@ -37,10 +37,9 @@ def cached_fundamentals(tickers: tuple):
 def run_screen(market_label, pe_max, vol_mult, rsi_min):
     tickers, currency = get_universe(market_label)
     history = cached_history(tuple(tickers))
-    fundamentals = cached_fundamentals(tuple(tickers))
-    metrics = [screener.compute_metrics(t, history.get(t), fundamentals.get(t)) for t in tickers]
-    result = screener.screen_and_rank(metrics, pe_max, vol_mult, rsi_min)
-    scanned = sum(1 for m in metrics if m)
+    # Two-stage: technicals for all, fundamentals only for survivors (cached, sorted for cache hits).
+    fetch_funds = lambda ts: cached_fundamentals(tuple(sorted(ts)))
+    result, scanned = screener.scan_universe(tickers, history, fetch_funds, pe_max, vol_mult, rsi_min)
     return result, currency, scanned, len(tickers)
 
 

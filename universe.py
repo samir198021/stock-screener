@@ -43,14 +43,16 @@ BSE_50 = [
     "BAJAJ-AUTO.BO", "M&M.BO", "SHRIRAMFIN.BO",
 ]
 
+from nifty500 import NIFTY_500  # full 500 constituents (auto-generated from NSE's CSV)
+
 MARKETS = {
-    "India (Nifty 500 — top 50)": {"tickers": NIFTY_50, "currency": "₹", "suffix": ".NS"},
-    "India (BSE — top 50)":       {"tickers": BSE_50,   "currency": "₹", "suffix": ".BO"},
-    "US (S&P 500 — top 50)":      {"tickers": SP_50,     "currency": "$", "suffix": ""},
+    "India (NSE Nifty 500)":  {"tickers": NIFTY_500, "currency": "₹", "suffix": ".NS"},
+    "India (BSE large-caps)": {"tickers": BSE_50,    "currency": "₹", "suffix": ".BO"},
+    "US (S&P 500 — top 50)":  {"tickers": SP_50,     "currency": "$", "suffix": ""},
 }
 
-# Hard cap applied everywhere, per the current requirement.
-MAX_STOCKS = 50
+# Safety cap (well above any single universe) so nothing runs away.
+MAX_STOCKS = 600
 
 
 def get_universe(market_label):
