@@ -1,0 +1,9 @@
+# Streamlit configuration (used locally and on Streamlit Community Cloud).
+[server]
+headless = true
+
+[browser]
+gatherUsageStats = false
+
+[theme]
+base = "light"
