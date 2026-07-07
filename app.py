@@ -162,8 +162,8 @@ st.caption(f"Source: **{source}**")
 if result is None or result.empty:
     st.info("No stocks currently pass all three filters. Try loosening the thresholds in the sidebar.")
 else:
-    cols = ["rank", "ticker", "sector", "price"]
-    names = ["Rank", "Ticker", "Sector", f"Price ({currency})"]
+    cols = ["rank", "ticker", "signal", "sector", "price"]
+    names = ["Rank", "Ticker", "Signal", "Sector", f"Price ({currency})"]
     if "pct_change" in result.columns:            # near-live today's move (Chartink path)
         cols.append("pct_change"); names.append("Chg %")
     cols += ["pe", "volume_ratio", "rsi", "range52", "vs_200dma", "conviction", "score", "chart"]
@@ -196,6 +196,12 @@ else:
             "Score": st.column_config.ProgressColumn(format="%.1f", min_value=0, max_value=100),
             "Chart": st.column_config.LinkColumn("Chart", display_text="📈 Open"),
         },
+    )
+
+    st.caption(
+        "⚠️ **Signal** (🟢 Strong / 🟡 Watch / 🔴 Weak) is a mechanical read of how many strength "
+        "signals align — **not financial advice or a buy/sell recommendation**. Always do your own "
+        "research and set a stop-loss before trading."
     )
 
     st.bar_chart(result.set_index("ticker")["score"])

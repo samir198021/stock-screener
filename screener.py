@@ -194,6 +194,11 @@ def screen_and_rank(metrics, pe_max=PE_MAX, vol_mult=VOLUME_MULTIPLE, rsi_min=RS
         + (passed["pe"] <= CHEAP_PE).astype(int)       # cheaper than the ceiling
     )
 
+    # Plain-English strength read (NOT advice) — derived purely from the conviction count.
+    passed["signal"] = passed["conviction"].map(
+        lambda c: "🟢 Strong" if c >= 4 else ("🟡 Watch" if c == 3 else "🔴 Weak")
+    )
+
     # Most-aligned setups first; composite score breaks ties.
     passed = passed.sort_values(["conviction", "score"], ascending=False).reset_index(drop=True)
     passed.insert(0, "rank", passed.index + 1)
