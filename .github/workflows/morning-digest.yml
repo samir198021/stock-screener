@@ -1,0 +1,23 @@
+name: Morning Watchlist Digest
+
+on:
+  schedule:
+    # 03:40 UTC = 09:10 IST, Monday–Friday (GitHub cron is UTC; runs may be delayed a few minutes).
+    - cron: "40 3 * * 1-5"
+  workflow_dispatch: {}   # lets you run it manually from the Actions tab to test
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deps
+        run: pip install yfinance pandas numpy requests
+      - name: Send morning digest
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python morning_digest.py
