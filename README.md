@@ -1,7 +1,8 @@
 # 📈 Near-Real-Time Stock Screener
 
-Screens Indian (Nifty 500) or US (S&P 500) stocks with `yfinance` and shows ranked results in an
-auto-refreshing Streamlit dashboard. Currently capped at the **top 50 names per market**.
+Screens Indian (NSE Nifty 500 or BSE large-caps) or US (S&P 500) stocks with `yfinance` (plus an
+optional near-live **Chartink** source for NSE) and shows ranked results in an auto-refreshing
+Streamlit dashboard. Currently capped at the **top ~50 names per market**.
 
 ## Filters (all must pass)
 - Trailing **P/E < 20** (positive earnings only)

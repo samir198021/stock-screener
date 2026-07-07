@@ -25,7 +25,10 @@ The extra columns are research aids (not part of the filter) to speed up due dil
 History is fetched over 1 year so the 52-week range and 200-day MA can be computed.
 
 ## Universe (currently capped at 50 per market)
-- **India** — top 50 of the Nifty 500 (i.e. the Nifty 50), Yahoo suffix `.NS`.
+- **India (NSE)** — top 50 of the Nifty 500 (i.e. the Nifty 50), Yahoo suffix `.NS`. Only this
+  market has the near-live Chartink path.
+- **India (BSE)** — 48 BSE large-caps (dual-listed with NSE), Yahoo suffix `.BO`, Yahoo-only
+  (delayed). `LTIM.BO`/`TATAMOTORS.BO` omitted (not on Yahoo's BSE feed).
 - **US** — top 50 of the S&P 500 by weight. NOTE: the S&P 500 spans NYSE **and** Nasdaq;
   it's the practical large-cap set. The full NYSE (~2,400 names) is not feasible in near real-time.
 - Lists live in `universe.py`. To grow to the full 500/500 later, extend the lists there —

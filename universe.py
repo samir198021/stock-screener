@@ -27,8 +27,25 @@ SP_50 = [
     "VZ", "TXN", "PM", "INTU", "AMGN", "COP", "CAT", "NEE", "UNP", "LOW",
 ]
 
+# Top BSE large-caps (dual-listed with NSE — same companies, BSE prices). Yahoo uses ".BO".
+# Verified to resolve on Yahoo; LTIM.BO and TATAMOTORS.BO are not on Yahoo's BSE feed, so omitted.
+# Note: BSE has no near-live Chartink path here, so this market always uses Yahoo (delayed).
+BSE_50 = [
+    "RELIANCE.BO", "TCS.BO", "HDFCBANK.BO", "ICICIBANK.BO", "INFY.BO",
+    "HINDUNILVR.BO", "ITC.BO", "SBIN.BO", "BHARTIARTL.BO", "BAJFINANCE.BO",
+    "KOTAKBANK.BO", "LT.BO", "HCLTECH.BO", "AXISBANK.BO", "MARUTI.BO",
+    "ASIANPAINT.BO", "SUNPHARMA.BO", "TITAN.BO", "ULTRACEMCO.BO", "WIPRO.BO",
+    "ONGC.BO", "NTPC.BO", "POWERGRID.BO", "NESTLEIND.BO", "TATASTEEL.BO",
+    "JSWSTEEL.BO", "ADANIENT.BO", "ADANIPORTS.BO", "COALINDIA.BO", "BAJAJFINSV.BO",
+    "GRASIM.BO", "HDFCLIFE.BO", "SBILIFE.BO", "BRITANNIA.BO", "DIVISLAB.BO",
+    "DRREDDY.BO", "CIPLA.BO", "EICHERMOT.BO", "HEROMOTOCO.BO", "HINDALCO.BO",
+    "INDUSINDBK.BO", "TECHM.BO", "APOLLOHOSP.BO", "BPCL.BO", "TATACONSUM.BO",
+    "BAJAJ-AUTO.BO", "M&M.BO", "SHRIRAMFIN.BO",
+]
+
 MARKETS = {
     "India (Nifty 500 — top 50)": {"tickers": NIFTY_50, "currency": "₹", "suffix": ".NS"},
+    "India (BSE — top 50)":       {"tickers": BSE_50,   "currency": "₹", "suffix": ".BO"},
     "US (S&P 500 — top 50)":      {"tickers": SP_50,     "currency": "$", "suffix": ""},
 }
 

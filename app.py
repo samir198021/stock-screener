@@ -159,24 +159,25 @@ c3.metric("Passed filters", 0 if result is None or result.empty else len(result)
 c4.metric("Last updated", datetime.now().strftime("%H:%M:%S"))
 st.caption(f"Source: **{source}**")
 
-# Market-session awareness (NSE, IST) — coaches the morning routine.
-_IST = timezone(timedelta(hours=5, minutes=30))
-_now_ist = datetime.now(_IST)
-_mins = _now_ist.hour * 60 + _now_ist.minute
-st.caption(f"🕒 IST now: **{_now_ist:%a %d %b, %H:%M}**")
-if _now_ist.weekday() >= 5:
-    st.info("🌙 **NSE is closed (weekend).** This reflects the **last close** — a watchlist to review "
-            "before Monday's open.")
-elif _mins < 9 * 60 + 15:
-    st.info("🌅 **Pre-open (before 9:15).** This scan reflects **yesterday's close** — treat it as "
-            "**today's watchlist**, then watch these names at the 9:15 open before acting. "
-            "Tip: use the **Yahoo** source now — Chartink's live volume only becomes meaningful "
-            "~30 min after the open (before that, almost nothing has traded today).")
-elif _mins <= 15 * 60 + 30:
-    st.info("🟢 **NSE is open** — data is intraday. For India, **Chartink** gives the freshest read; "
-            "volume ratios firm up as the session builds.")
-else:
-    st.info("🔔 **NSE closed for the day.** Showing **today's close** — a watchlist for tomorrow.")
+# Market-session awareness (NSE/BSE, IST) — only relevant for the India markets.
+if market_label.startswith("India"):
+    _IST = timezone(timedelta(hours=5, minutes=30))
+    _now_ist = datetime.now(_IST)
+    _mins = _now_ist.hour * 60 + _now_ist.minute
+    st.caption(f"🕒 IST now: **{_now_ist:%a %d %b, %H:%M}**")
+    if _now_ist.weekday() >= 5:
+        st.info("🌙 **Market closed (weekend).** This reflects the **last close** — a watchlist to "
+                "review before Monday's open.")
+    elif _mins < 9 * 60 + 15:
+        st.info("🌅 **Pre-open (before 9:15).** This scan reflects **yesterday's close** — treat it as "
+                "**today's watchlist**, then watch these names at the 9:15 open before acting. "
+                "Tip: use the **Yahoo** source now — Chartink's live volume only becomes meaningful "
+                "~30 min after the open (before that, almost nothing has traded today).")
+    elif _mins <= 15 * 60 + 30:
+        st.info("🟢 **Market open** — data is intraday. For NSE, **Chartink** gives the freshest read; "
+                "volume ratios firm up as the session builds. (BSE uses Yahoo, delayed.)")
+    else:
+        st.info("🔔 **Market closed for the day.** Showing **today's close** — a watchlist for tomorrow.")
 
 if result is None or result.empty:
     st.info("No stocks currently pass all three filters. Try loosening the thresholds in the sidebar.")
