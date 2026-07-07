@@ -21,6 +21,12 @@ VOLUME_MULTIPLE = 1.5
 RSI_MIN = 50.0
 RSI_PERIOD = 14
 
+# "Conviction" = how many BONUS strength signals align, beyond the 3 mandatory filters.
+# These are deliberately stricter than the filters, so a high count = an unusually strong setup.
+STRONG_RSI = 60.0        # momentum clearly strong, not just > 50
+STRONG_VOLUME = 2.0      # a real spike, not just above average
+CHEAP_PE = 15.0          # cheaper than the 20 ceiling
+
 
 def fetch_price_history(tickers, period="1y", interval="1d"):
     """Batch-download OHLCV for all tickers in ONE request.
@@ -176,6 +182,17 @@ def screen_and_rank(metrics, pe_max=PE_MAX, vol_mult=VOLUME_MULTIPLE, rsi_min=RS
         + _normalize(1.0 / passed["pe"])
     ) / 3.0 * 100.0
     passed["score"] = score
-    passed = passed.sort_values("score", ascending=False).reset_index(drop=True)
+
+    # Conviction (0-5): count of bonus signals that agree. NaNs compare False -> not counted.
+    passed["conviction"] = (
+        (passed["vs_200dma"] > 0).astype(int)          # in a longer-term uptrend
+        + (passed["range52"] >= 50).astype(int)        # in the upper half of its 52-week range
+        + (passed["rsi"] >= STRONG_RSI).astype(int)    # strong momentum
+        + (passed["volume_ratio"] >= STRONG_VOLUME).astype(int)  # genuine volume spike
+        + (passed["pe"] <= CHEAP_PE).astype(int)       # cheaper than the ceiling
+    )
+
+    # Most-aligned setups first; composite score breaks ties.
+    passed = passed.sort_values(["conviction", "score"], ascending=False).reset_index(drop=True)
     passed.insert(0, "rank", passed.index + 1)
     return passed

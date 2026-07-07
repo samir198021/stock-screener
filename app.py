@@ -76,7 +76,8 @@ if auto:
 st.title("📈 Near-Real-Time Stock Screener")
 st.caption(
     "Keeps stocks with **P/E < {:.0f}**, **volume > {:.1f}× 20-day avg**, and **RSI(14) > {:.0f}** — "
-    "ranked by composite score (RSI + volume ratio + inverse P/E).".format(pe_max, vol_mult, rsi_min)
+    "ranked by **Conviction** (how many bonus strength signals align), then composite score."
+    .format(pe_max, vol_mult, rsi_min)
 )
 
 with st.spinner("Fetching quotes…"):
@@ -93,11 +94,11 @@ if result is None or result.empty:
 else:
     display = result[
         ["rank", "ticker", "sector", "price", "pe", "volume_ratio", "rsi",
-         "range52", "vs_200dma", "score", "chart"]
+         "range52", "vs_200dma", "conviction", "score", "chart"]
     ].copy()
     display.columns = [
         "Rank", "Ticker", "Sector", f"Price ({currency})", "P/E", "Vol ×", "RSI",
-        "52W Range", "vs 200DMA", "Score", "Chart",
+        "52W Range", "vs 200DMA", "Conviction", "Score", "Chart",
     ]
     st.dataframe(
         display,
@@ -115,6 +116,11 @@ else:
             "vs 200DMA": st.column_config.NumberColumn(
                 format="%+.1f%%",
                 help="Percent above (+) or below (-) the 200-day moving average. Above = longer-term uptrend.",
+            ),
+            "Conviction": st.column_config.ProgressColumn(
+                format="%.0f", min_value=0, max_value=5,
+                help="How many BONUS strength signals align (0-5): above 200-DMA, upper half of "
+                     "52-week range, RSI>=60, volume>=2x, P/E<=15. Higher = stronger setup (not a guarantee).",
             ),
             "Score": st.column_config.ProgressColumn(format="%.1f", min_value=0, max_value=100),
             "Chart": st.column_config.LinkColumn("Chart", display_text="📈 Open"),

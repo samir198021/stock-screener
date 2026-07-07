@@ -14,8 +14,13 @@ For a chosen market (India / US) it screens a universe of stocks and keeps only 
 Survivors are ranked by a **composite score** = equal-weighted blend of normalized RSI,
 volume ratio, and inverse P/E (so "cheap + strong momentum + volume spike" ranks highest).
 
+Survivors are then ranked by **Conviction** first (0-5: how many bonus strength signals align —
+above 200-DMA, upper half of 52-week range, RSI>=60, volume>=2x, P/E<=15), with the composite
+score breaking ties. A stock can pass the 3 filters yet have low conviction (e.g. a bounce in a
+downtrend), so this column separates strong setups from weak ones.
+
 Output columns: rank, ticker, sector, current price, P/E, volume ratio, RSI,
-52-week range position, % vs 200-day MA, score, and a chart link.
+52-week range position, % vs 200-day MA, conviction, score, and a chart link.
 The extra columns are research aids (not part of the filter) to speed up due diligence.
 History is fetched over 1 year so the 52-week range and 200-day MA can be computed.
 
