@@ -27,6 +27,12 @@ STRONG_RSI = 60.0        # momentum clearly strong, not just > 50
 STRONG_VOLUME = 2.0      # a real spike, not just above average
 CHEAP_PE = 15.0          # cheaper than the 20 ceiling
 
+# "Extended" = already run up hard, so higher pullback (mean-reversion) risk. These get flagged
+# 🟠 so you DON'T chase them at the open — the edge is usually in strong-but-not-yet-overcooked names.
+EXTENDED_RSI = 80.0            # overbought
+EXTENDED_ABOVE_200DMA = 25.0  # price > 25% above its 200-day average = stretched
+EXTENDED_DAY_MOVE = 8.0       # already up > 8% today (Chartink path) = chasing
+
 
 def fetch_price_history(tickers, period="1y", interval="1d"):
     """Batch-download OHLCV for all tickers in ONE request.
@@ -194,10 +200,19 @@ def screen_and_rank(metrics, pe_max=PE_MAX, vol_mult=VOLUME_MULTIPLE, rsi_min=RS
         + (passed["pe"] <= CHEAP_PE).astype(int)       # cheaper than the ceiling
     )
 
-    # Plain-English strength read (NOT advice) — derived purely from the conviction count.
-    passed["signal"] = passed["conviction"].map(
-        lambda c: "🟢 Strong" if c >= 4 else ("🟡 Watch" if c == 3 else "🔴 Weak")
-    )
+    # Flag "extended" names (already run up hard) — higher next-day pullback risk, so don't chase.
+    extended = (passed["rsi"] >= EXTENDED_RSI) | (passed["vs_200dma"].fillna(0) >= EXTENDED_ABOVE_200DMA)
+    if "pct_change" in passed.columns:
+        extended = extended | (passed["pct_change"].fillna(0) >= EXTENDED_DAY_MOVE)
+    passed["extended"] = extended
+
+    # Plain-English strength read (NOT advice). "Extended" overrides Strong so you don't chase it.
+    def _signal(row):
+        if row["extended"]:
+            return "🟠 Extended"
+        c = row["conviction"]
+        return "🟢 Strong" if c >= 4 else ("🟡 Watch" if c == 3 else "🔴 Weak")
+    passed["signal"] = passed.apply(_signal, axis=1)
 
     # Most-aligned setups first; composite score breaks ties.
     passed = passed.sort_values(["conviction", "score"], ascending=False).reset_index(drop=True)

@@ -218,9 +218,10 @@ else:
     )
 
     st.caption(
-        "⚠️ **Signal** (🟢 Strong / 🟡 Watch / 🔴 Weak) is a mechanical read of how many strength "
-        "signals align — **not financial advice or a buy/sell recommendation**. Always do your own "
-        "research and set a stop-loss before trading."
+        "⚠️ **Signal:** 🟢 Strong · 🟡 Watch · 🔴 Weak · 🟠 **Extended** = strong but already run up "
+        "hard (overbought / far above average / big move today), so **higher pullback risk — don't "
+        "chase**; wait for a pullback or a base. This is a mechanical read, **not financial advice "
+        "or a buy/sell call**. Do your own research and set a stop-loss."
     )
 
     st.bar_chart(result.set_index("ticker")["score"])
