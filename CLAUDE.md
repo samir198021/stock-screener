@@ -39,8 +39,19 @@ stock-screener/
 ├── requirements.txt   pinned-ish deps
 ├── universe.py        ticker lists + get_universe(market)
 ├── screener.py        pure logic: fetch, RSI, volume ratio, P/E, screen, rank (NO streamlit)
+├── chartink.py        near-live NSE scan via Chartink's unofficial endpoint (best-effort)
 └── app.py             Streamlit UI + cached network wrappers (port 8501)
 ```
+
+## Data sources (India can pick; US is Yahoo-only)
+- **Yahoo (default for US, optional for India):** ~15 min delayed, but always available.
+- **Chartink (India near-live):** `chartink.py` POSTs a scan clause (RSI>min AND volume>mult×20-day
+  SMA) to Chartink's screener endpoint and gets today's movers across ALL NSE with near-live price
+  and % change. The app takes the top movers by % change, then **enriches them from Yahoo**
+  (P/E, sector, 52-week range, 200-DMA, conviction) and applies the P/E filter. Chartink is
+  unofficial and may be blocked from cloud IPs, so any failure **falls back to Yahoo automatically**.
+  For the Chartink path, `screen_and_rank(..., require_technicals=False)` trusts Chartink's near-live
+  RSI/volume and only re-applies the P/E filter.
 `screener.py` is intentionally framework-agnostic (no `streamlit` import) so it stays testable;
 Streamlit-specific caching lives in `app.py`.
 

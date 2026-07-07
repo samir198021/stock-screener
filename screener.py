@@ -154,10 +154,14 @@ def _normalize(s: pd.Series) -> pd.Series:
     return (s - s.min()) / rng
 
 
-def screen_and_rank(metrics, pe_max=PE_MAX, vol_mult=VOLUME_MULTIPLE, rsi_min=RSI_MIN):
-    """Filter by all three rules (AND) and rank survivors by composite score.
+def screen_and_rank(metrics, pe_max=PE_MAX, vol_mult=VOLUME_MULTIPLE, rsi_min=RSI_MIN,
+                    require_technicals=True):
+    """Filter by the rules and rank survivors by conviction, then composite score.
 
-    Composite = mean of normalized(RSI), normalized(volume_ratio), normalized(1/PE), ×100.
+    require_technicals=True  -> apply all three filters (P/E, volume, RSI) here (Yahoo path).
+    require_technicals=False -> apply only the P/E filter; RSI + volume were already enforced
+                                near-live upstream (Chartink path), so don't re-drop on the
+                                slightly-delayed Yahoo recompute.
     Returns a DataFrame (possibly empty) sorted best-first, plus a 'rank' column.
     """
     rows = [m for m in metrics if m]
@@ -166,12 +170,10 @@ def screen_and_rank(metrics, pe_max=PE_MAX, vol_mult=VOLUME_MULTIPLE, rsi_min=RS
         return df
 
     df = df.dropna(subset=["pe", "volume_ratio", "rsi"])
-    passed = df[
-        (df["pe"] > 0)
-        & (df["pe"] < pe_max)
-        & (df["volume_ratio"] > vol_mult)
-        & (df["rsi"] > rsi_min)
-    ].copy()
+    cond = (df["pe"] > 0) & (df["pe"] < pe_max)
+    if require_technicals:
+        cond &= (df["volume_ratio"] > vol_mult) & (df["rsi"] > rsi_min)
+    passed = df[cond].copy()
 
     if passed.empty:
         return passed

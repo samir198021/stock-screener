@@ -9,8 +9,11 @@ import pandas as pd
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 
+import chartink
 import screener
 from universe import MARKETS, get_universe
+
+INDIA_LABEL = "India (Nifty 500 — top 50)"
 
 st.set_page_config(page_title="Stock Screener", page_icon="📈", layout="wide")
 
@@ -41,12 +44,66 @@ def run_screen(market_label, pe_max, vol_mult, rsi_min):
     return result, currency, scanned, len(tickers)
 
 
+@st.cache_data(ttl=60, show_spinner=False)
+def cached_chartink(rsi_min: float, vol_mult: float):
+    """Near-live NSE scan (RSI + volume) from Chartink, cached for the refresh interval."""
+    return chartink.fetch_scan(rsi_min=rsi_min, vol_mult=vol_mult)
+
+
+def run_screen_chartink(pe_max, vol_mult, rsi_min, top_n=50):
+    """India near-live path: Chartink finds today's RSI+volume movers across all NSE, then we
+    enrich the top movers with Yahoo (P/E, sector, 200-DMA, conviction) and apply the P/E filter.
+    Raises on Chartink failure so the caller can fall back to Yahoo."""
+    rows = cached_chartink(rsi_min, vol_mult)
+    if not rows:
+        return pd.DataFrame(), "₹", 0, 0
+
+    # Biggest movers first, capped so enrichment stays cheap.
+    rows = sorted(rows, key=lambda r: r.get("per_chg") or 0, reverse=True)[:top_n]
+    tickers = [r["nsecode"] + ".NS" for r in rows]
+    history = cached_history(tuple(tickers))
+    fundamentals = cached_fundamentals(tuple(tickers))
+
+    metrics = []
+    for r in rows:
+        t = r["nsecode"] + ".NS"
+        m = screener.compute_metrics(t, history.get(t), fundamentals.get(t))
+        if not m:
+            continue
+        # Use Chartink's near-live price; scale P/E to it; keep today's % change.
+        old_price = m["price"]
+        live_price = float(r["close"])
+        m["price"] = live_price
+        if m.get("pe") and old_price:
+            m["pe"] = m["pe"] * (live_price / old_price)
+        m["pct_change"] = r.get("per_chg")
+        m["ticker"] = r["nsecode"]
+        metrics.append(m)
+
+    # Trust Chartink's near-live RSI/volume; only apply the P/E filter here.
+    result = screener.screen_and_rank(metrics, pe_max, vol_mult, rsi_min, require_technicals=False)
+    return result, "₹", len(metrics), len(tickers)
+
+
 # ---------------------------------------------------------------------------
 # Sidebar controls
 # ---------------------------------------------------------------------------
 st.sidebar.header("⚙️ Settings")
 
 market_label = st.sidebar.selectbox("Market", list(MARKETS.keys()))
+
+# Data source — Chartink (near-live) is only offered for India; US is always Yahoo.
+if market_label == INDIA_LABEL:
+    source_choice = st.sidebar.radio(
+        "Data source",
+        ["Near-live (Chartink)", "Delayed (Yahoo)"],
+        help="Chartink pulls near-live NSE data during market hours (scans all NSE, shows top "
+             "movers). Yahoo is ~15 min delayed but always available. Falls back to Yahoo if "
+             "Chartink is unreachable.",
+    )
+    use_chartink = source_choice.startswith("Near-live")
+else:
+    use_chartink = False
 
 st.sidebar.subheader("Filters")
 pe_max = st.sidebar.number_input("Max trailing P/E", min_value=1.0, max_value=200.0, value=20.0, step=1.0)
@@ -58,11 +115,13 @@ auto = st.sidebar.toggle("Auto-refresh", value=True)
 interval = st.sidebar.select_slider("Interval (seconds)", options=[30, 60, 120, 300], value=60)
 if st.sidebar.button("🔄 Rescan now"):
     cached_history.clear()
+    cached_chartink.clear()
     st.rerun()
 
 st.sidebar.caption(
-    "Data via Yahoo Finance (yfinance) — delayed ~15 min, not tick data. "
-    "Prices are fetched in one batched request per refresh; EPS is cached hourly to respect rate limits."
+    "India can use **Chartink** (near-live NSE) or **Yahoo** (~15 min delayed); US uses Yahoo. "
+    "Chartink finds today's RSI+volume movers across all NSE; P/E, sector, 200-DMA and conviction "
+    "are enriched from Yahoo. Falls back to Yahoo automatically if Chartink is unreachable."
 )
 
 # Timed auto-refresh (triggers a rerun; the ttl caches decide when data is actually refetched).
@@ -81,31 +140,43 @@ st.caption(
 )
 
 with st.spinner("Fetching quotes…"):
-    result, currency, scanned, total = run_screen(market_label, pe_max, vol_mult, rsi_min)
+    if use_chartink:
+        try:
+            result, currency, scanned, total = run_screen_chartink(pe_max, vol_mult, rsi_min)
+            source = "Chartink (near-live NSE)"
+        except Exception as e:
+            st.warning(f"Chartink is unreachable right now — falling back to Yahoo (delayed). [{e}]")
+            result, currency, scanned, total = run_screen(market_label, pe_max, vol_mult, rsi_min)
+            source = "Yahoo (delayed ~15 min)"
+    else:
+        result, currency, scanned, total = run_screen(market_label, pe_max, vol_mult, rsi_min)
+        source = "Yahoo (delayed ~15 min)"
 
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Market", market_label.split(" (")[0])
 c2.metric("Scanned", f"{scanned}/{total}")
-c3.metric("Passed all filters", 0 if result is None or result.empty else len(result))
+c3.metric("Passed filters", 0 if result is None or result.empty else len(result))
 c4.metric("Last updated", datetime.now().strftime("%H:%M:%S"))
+st.caption(f"Source: **{source}**")
 
 if result is None or result.empty:
     st.info("No stocks currently pass all three filters. Try loosening the thresholds in the sidebar.")
 else:
-    display = result[
-        ["rank", "ticker", "sector", "price", "pe", "volume_ratio", "rsi",
-         "range52", "vs_200dma", "conviction", "score", "chart"]
-    ].copy()
-    display.columns = [
-        "Rank", "Ticker", "Sector", f"Price ({currency})", "P/E", "Vol ×", "RSI",
-        "52W Range", "vs 200DMA", "Conviction", "Score", "Chart",
-    ]
+    cols = ["rank", "ticker", "sector", "price"]
+    names = ["Rank", "Ticker", "Sector", f"Price ({currency})"]
+    if "pct_change" in result.columns:            # near-live today's move (Chartink path)
+        cols.append("pct_change"); names.append("Chg %")
+    cols += ["pe", "volume_ratio", "rsi", "range52", "vs_200dma", "conviction", "score", "chart"]
+    names += ["P/E", "Vol ×", "RSI", "52W Range", "vs 200DMA", "Conviction", "Score", "Chart"]
+    display = result[cols].copy()
+    display.columns = names
     st.dataframe(
         display,
         hide_index=True,
         use_container_width=True,
         column_config={
             f"Price ({currency})": st.column_config.NumberColumn(format="%.2f"),
+            "Chg %": st.column_config.NumberColumn(format="%+.2f%%", help="Today's price change (near-live, Chartink)."),
             "P/E": st.column_config.NumberColumn(format="%.2f"),
             "Vol ×": st.column_config.NumberColumn(format="%.2fx"),
             "RSI": st.column_config.NumberColumn(format="%.1f"),
