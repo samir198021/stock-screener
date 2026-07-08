@@ -34,12 +34,13 @@ def cached_fundamentals(tickers: tuple):
     return screener.fetch_fundamentals(list(tickers))
 
 
-def run_screen(market_label, pe_max, vol_mult, rsi_min):
+def run_screen(market_label, pe_max, vol_mult, rsi_min, min_traded_value=0.0):
     tickers, currency = get_universe(market_label)
     history = cached_history(tuple(tickers))
     # Two-stage: technicals for all, fundamentals only for survivors (cached, sorted for cache hits).
     fetch_funds = lambda ts: cached_fundamentals(tuple(sorted(ts)))
-    result, scanned, watch = screener.scan_universe(tickers, history, fetch_funds, pe_max, vol_mult, rsi_min)
+    result, scanned, watch = screener.scan_universe(
+        tickers, history, fetch_funds, pe_max, vol_mult, rsi_min, min_traded_value)
     return result, currency, scanned, len(tickers), watch
 
 
@@ -49,7 +50,7 @@ def cached_chartink(rsi_min: float, vol_mult: float):
     return chartink.fetch_scan(rsi_min=rsi_min, vol_mult=vol_mult)
 
 
-def run_screen_chartink(pe_max, vol_mult, rsi_min, top_n=50):
+def run_screen_chartink(pe_max, vol_mult, rsi_min, min_traded_value=0.0, top_n=50):
     """India near-live path: Chartink finds today's RSI+volume movers across all NSE, then we
     enrich the top movers with Yahoo (P/E, sector, 200-DMA, conviction) and apply the P/E filter.
     Raises on Chartink failure so the caller can fall back to Yahoo."""
@@ -79,8 +80,9 @@ def run_screen_chartink(pe_max, vol_mult, rsi_min, top_n=50):
         m["ticker"] = r["nsecode"]
         metrics.append(m)
 
-    # Trust Chartink's near-live RSI/volume; only apply the P/E filter here.
-    result = screener.screen_and_rank(metrics, pe_max, vol_mult, rsi_min, require_technicals=False)
+    # Trust Chartink's near-live RSI/volume; only apply the P/E + liquidity filters here.
+    result = screener.screen_and_rank(metrics, pe_max, vol_mult, rsi_min,
+                                      require_technicals=False, min_traded_value=min_traded_value)
     return result, "₹", len(metrics), len(tickers), None  # no full-universe base -> no coil watch
 
 
@@ -108,6 +110,14 @@ st.sidebar.subheader("Filters")
 pe_max = st.sidebar.number_input("Max trailing P/E", min_value=1.0, max_value=200.0, value=20.0, step=1.0)
 vol_mult = st.sidebar.number_input("Min volume spike (× 20-day avg)", min_value=1.0, max_value=20.0, value=1.5, step=0.5)
 rsi_min = st.sidebar.number_input("Min RSI (14)", min_value=1.0, max_value=99.0, value=50.0, step=1.0)
+
+# Liquidity floor — drops thinly-traded, untradeable names (avg daily turnover). Unit by market.
+if market_label.startswith("US"):
+    _min_liq_disp = st.sidebar.number_input("Min liquidity ($ million/day)", 0.0, 2000.0, 5.0, 1.0)
+    min_traded_value = _min_liq_disp * 1e6
+else:
+    _min_liq_disp = st.sidebar.number_input("Min liquidity (₹ crore/day)", 0.0, 2000.0, 1.0, 0.5)
+    min_traded_value = _min_liq_disp * 1e7
 
 st.sidebar.subheader("Refresh")
 auto = st.sidebar.toggle("Auto-refresh", value=True)
@@ -141,14 +151,14 @@ st.caption(
 with st.spinner("Fetching quotes…"):
     if use_chartink:
         try:
-            result, currency, scanned, total, watch = run_screen_chartink(pe_max, vol_mult, rsi_min)
+            result, currency, scanned, total, watch = run_screen_chartink(pe_max, vol_mult, rsi_min, min_traded_value)
             source = "Chartink (near-live NSE)"
         except Exception as e:
             st.warning(f"Chartink is unreachable right now — falling back to Yahoo (delayed). [{e}]")
-            result, currency, scanned, total, watch = run_screen(market_label, pe_max, vol_mult, rsi_min)
+            result, currency, scanned, total, watch = run_screen(market_label, pe_max, vol_mult, rsi_min, min_traded_value)
             source = "Yahoo (delayed ~15 min)"
     else:
-        result, currency, scanned, total, watch = run_screen(market_label, pe_max, vol_mult, rsi_min)
+        result, currency, scanned, total, watch = run_screen(market_label, pe_max, vol_mult, rsi_min, min_traded_value)
         source = "Yahoo (delayed ~15 min)"
 
 c1, c2, c3, c4 = st.columns(4)
@@ -181,19 +191,26 @@ if market_label.startswith("India"):
 if result is None or result.empty:
     st.info("No stocks currently pass all three filters. Try loosening the thresholds in the sidebar.")
 else:
+    # Liquidity in market units (₹ crore/day or $ million/day).
+    liq_div = 1e6 if currency == "$" else 1e7
+    liq_name = "Liq ($M)" if currency == "$" else "Liq (₹cr)"
+    result = result.copy()
+    result["liq"] = result["traded_value"] / liq_div
+
     cols = ["rank", "ticker", "signal", "trend", "breakout", "sector", "price"]
     names = ["Rank", "Ticker", "Signal", "Trend", "Breakout", "Sector", f"Price ({currency})"]
     if "pct_change" in result.columns:            # near-live today's move (Chartink path)
         cols.append("pct_change"); names.append("Chg %")
-    cols += ["pe", "volume_ratio", "rsi", "range52", "vs_200dma", "conviction", "score", "chart"]
-    names += ["P/E", "Vol ×", "RSI", "52W Range", "vs 200DMA", "Conviction", "Score", "Chart"]
+    cols += ["pe", "volume_ratio", "liq", "rsi", "range52", "vs_200dma", "conviction", "score", "chart"]
+    names += ["P/E", "Vol ×", liq_name, "RSI", "52W Range", "vs 200DMA", "Conviction", "Score", "Chart"]
     display = result[cols].copy()
     display.columns = names
-    st.dataframe(
-        display,
-        hide_index=True,
-        use_container_width=True,
-        column_config={
+    colcfg = {
+            liq_name: st.column_config.NumberColumn(
+                format="%.2f",
+                help="Avg daily turnover (price × 20-day avg volume). Higher = easier to buy/sell. "
+                     "Low values = thinly traded (hard to exit, circuit-prone) — raise 'Min liquidity' "
+                     "in the sidebar to hide these."),
             "Trend": st.column_config.TextColumn(
                 help="Direction from moving averages — ⬆️ Uptrend (price > 20-DMA > 50-DMA, going "
                      "strong), ↗️ Turning up, ➡️ Pausing, ⬇️ Fading (rolling over). Not a guarantee."),
@@ -221,8 +238,8 @@ else:
             ),
             "Score": st.column_config.ProgressColumn(format="%.1f", min_value=0, max_value=100),
             "Chart": st.column_config.LinkColumn("Chart", display_text="📈 Open"),
-        },
-    )
+    }
+    st.dataframe(display, hide_index=True, use_container_width=True, column_config=colcfg)
 
     st.caption(
         "⚠️ **Signal:** 🟢 Strong · 🟡 Watch · 🔴 Weak · 🟠 **Extended** = strong but already run up "

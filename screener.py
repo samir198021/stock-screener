@@ -115,6 +115,7 @@ def compute_metrics(ticker: str, hist: pd.DataFrame, fundamentals):
     latest_vol = float(volume.iloc[-1])
     avg20 = float(volume.iloc[-21:-1].mean())  # the 20 bars BEFORE the latest
     vol_ratio = latest_vol / avg20 if avg20 > 0 else np.nan
+    traded_value = price * avg20  # ~avg daily rupee/dollar turnover — the liquidity gauge
 
     rsi = compute_rsi(close)
 
@@ -160,6 +161,7 @@ def compute_metrics(ticker: str, hist: pd.DataFrame, fundamentals):
         "vs_200dma": vs_200dma,
         "trend": trend,
         "breakout": breakout,
+        "traded_value": traded_value,
         "chart": "https://finance.yahoo.com/quote/" + ticker,
     }
 
@@ -219,7 +221,7 @@ def compute_base(tickers, history):
 
 
 def scan_universe(tickers, history, fundamentals_fetcher,
-                  pe_max=PE_MAX, vol_mult=VOLUME_MULTIPLE, rsi_min=RSI_MIN):
+                  pe_max=PE_MAX, vol_mult=VOLUME_MULTIPLE, rsi_min=RSI_MIN, min_traded_value=0.0):
     """Efficient two-stage scan for large universes (e.g. Nifty 500).
 
     Stage 1: compute technicals (RSI, volume ratio, 52w, 200-DMA) for every ticker from the
@@ -240,19 +242,20 @@ def scan_universe(tickers, history, fundamentals_fetcher,
             if eps and eps > 0:
                 m["pe"] = m["price"] / float(eps)
 
-    result = screen_and_rank(survivors, pe_max, vol_mult, rsi_min)
-    watch = prebreakout_watch(base)
+    result = screen_and_rank(survivors, pe_max, vol_mult, rsi_min, min_traded_value=min_traded_value)
+    watch = prebreakout_watch(base, min_traded_value=min_traded_value)
     return result, len(base), watch
 
 
-def prebreakout_watch(base, limit=15):
+def prebreakout_watch(base, limit=15, min_traded_value=0.0):
     """Tight-base coils in an uptrend — the pre-breakout watch. Derived from the full base
     (they have low volume, so they never survive the volume-spike filter). Best-first by how
     close they are to their 52-week high."""
     watch = [m for m in base
              if m.get("breakout") == "🎯 Tight base"
              and m.get("trend") in ("⬆️ Uptrend", "↗️ Turning up")
-             and m.get("rsi", 0) > 45]
+             and m.get("rsi", 0) > 45
+             and m.get("traded_value", 0) >= min_traded_value]
     watch.sort(key=lambda m: m["range52"] if not np.isnan(m.get("range52", np.nan)) else 0,
                reverse=True)
     return watch[:limit]
@@ -267,7 +270,7 @@ def _normalize(s: pd.Series) -> pd.Series:
 
 
 def screen_and_rank(metrics, pe_max=PE_MAX, vol_mult=VOLUME_MULTIPLE, rsi_min=RSI_MIN,
-                    require_technicals=True):
+                    require_technicals=True, min_traded_value=0.0):
     """Filter by the rules and rank survivors by conviction, then composite score.
 
     require_technicals=True  -> apply all three filters (P/E, volume, RSI) here (Yahoo path).
@@ -285,6 +288,8 @@ def screen_and_rank(metrics, pe_max=PE_MAX, vol_mult=VOLUME_MULTIPLE, rsi_min=RS
     cond = (df["pe"] > 0) & (df["pe"] < pe_max)
     if require_technicals:
         cond &= (df["volume_ratio"] > vol_mult) & (df["rsi"] > rsi_min)
+    if min_traded_value > 0 and "traded_value" in df.columns:
+        cond &= df["traded_value"] >= min_traded_value   # drop illiquid, untradeable names
     passed = df[cond].copy()
 
     if passed.empty:

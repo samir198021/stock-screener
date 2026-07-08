@@ -37,10 +37,11 @@ def build_lists():
             m["sector"] = f.get("sector") or "—"
             if eps and eps > 0:
                 m["pe"] = m["price"] / float(eps)
-    active = screener.screen_and_rank(survivors)
+    min_liq = 1e7  # ₹1 crore/day turnover — skip thinly-traded, untradeable names
+    active = screener.screen_and_rank(survivors, min_traded_value=min_liq)
 
     # Pre-breakout watch: tight-base coils in an uptrend (shared with the dashboard).
-    watch = screener.prebreakout_watch(base, limit=10)
+    watch = screener.prebreakout_watch(base, limit=10, min_traded_value=min_liq)
     return active, watch
 
 

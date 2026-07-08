@@ -22,8 +22,10 @@ downtrend), so this column separates strong setups from weak ones.
 Output columns: rank, ticker, **Signal** (🟢/🟡/🔴/🟠), **Trend** (⬆️ Uptrend / ↗️ Turning up /
 ➡️ Pausing / ⬇️ Fading, from 20/50-DMA alignment), **Breakout** (🚀 55D high / 🔼 20D high /
 🎯 Tight base = pre-breakout volatility-contraction coil / 🏔️ near 52wk high — Donchian + VCP,
-not fragile named-pattern detection), sector, current price, P/E, volume ratio, RSI,
+not fragile named-pattern detection), sector, current price, P/E, volume ratio, **liquidity** (avg daily turnover, ₹cr / $M), RSI,
 52-week range position, % vs 200-day MA, conviction, score, and a chart link.
+A sidebar **Min liquidity** filter drops thinly-traded/untradeable names (default ₹1 cr/day for
+India, $5 M/day for US); the digest applies a ₹1 cr floor. Turnover = price × 20-day avg volume.
 The extra columns are research aids (not part of the filter) to speed up due diligence.
 History is fetched over 1 year so the 52-week range and 200-day MA can be computed.
 
