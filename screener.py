@@ -144,6 +144,10 @@ def compute_metrics(ticker: str, hist: pd.DataFrame, fundamentals):
     ma50 = float(close.rolling(50).mean().iloc[-1]) if len(close) >= 50 else np.nan
     trend = _trend(price, ma20, ma50)
 
+    # Breakout: closing above a recent high (Donchian-style) — the robust, computable "pattern".
+    highs = hist["High"].dropna() if "High" in hist else close
+    breakout = _breakout(price, highs, range52)
+
     return {
         "ticker": ticker,
         "price": price,
@@ -154,8 +158,22 @@ def compute_metrics(ticker: str, hist: pd.DataFrame, fundamentals):
         "range52": range52,
         "vs_200dma": vs_200dma,
         "trend": trend,
+        "breakout": breakout,
         "chart": "https://finance.yahoo.com/quote/" + ticker,
     }
+
+
+def _breakout(price, highs, range52):
+    """Robust breakout read: is today's price above the highest high of a recent window?
+    55-day = ~quarterly breakout (strongest), 20-day = ~monthly, else near the 52-week high."""
+    n = len(highs)
+    if n >= 56 and price > float(highs.iloc[-56:-1].max()):
+        return "🚀 55D high"
+    if n >= 21 and price > float(highs.iloc[-21:-1].max()):
+        return "🔼 20D high"
+    if not np.isnan(range52) and range52 >= 90:
+        return "🏔️ Near 52wk hi"
+    return "—"
 
 
 def _trend(price, ma20, ma50):

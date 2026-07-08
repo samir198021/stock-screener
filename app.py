@@ -181,8 +181,8 @@ if market_label.startswith("India"):
 if result is None or result.empty:
     st.info("No stocks currently pass all three filters. Try loosening the thresholds in the sidebar.")
 else:
-    cols = ["rank", "ticker", "signal", "trend", "sector", "price"]
-    names = ["Rank", "Ticker", "Signal", "Trend", "Sector", f"Price ({currency})"]
+    cols = ["rank", "ticker", "signal", "trend", "breakout", "sector", "price"]
+    names = ["Rank", "Ticker", "Signal", "Trend", "Breakout", "Sector", f"Price ({currency})"]
     if "pct_change" in result.columns:            # near-live today's move (Chartink path)
         cols.append("pct_change"); names.append("Chg %")
     cols += ["pe", "volume_ratio", "rsi", "range52", "vs_200dma", "conviction", "score", "chart"]
@@ -197,6 +197,10 @@ else:
             "Trend": st.column_config.TextColumn(
                 help="Direction from moving averages — ⬆️ Uptrend (price > 20-DMA > 50-DMA, going "
                      "strong), ↗️ Turning up, ➡️ Pausing, ⬇️ Fading (rolling over). Not a guarantee."),
+            "Breakout": st.column_config.TextColumn(
+                help="Closing above a recent high — 🚀 55D high (broke a ~3-month high, strongest), "
+                     "🔼 20D high (~1-month), 🏔️ Near 52wk hi (top 10% of the year). Best when Vol× "
+                     "is high (real breakout, not a fake-out)."),
             f"Price ({currency})": st.column_config.NumberColumn(format="%.2f"),
             "Chg %": st.column_config.NumberColumn(format="%+.2f%%", help="Today's price change (near-live, Chartink)."),
             "P/E": st.column_config.NumberColumn(format="%.2f"),
