@@ -17,42 +17,68 @@ NSE = "India (NSE Nifty 500)"
 IST = timezone(timedelta(hours=5, minutes=30))
 
 
-def build_result():
+def build_lists():
+    """Returns (active_df, watch_metrics):
+      active_df     — stocks passing the full screen (breaking out now, volume up)
+      watch_metrics — 🎯 tight-base coils in an uptrend (pre-breakout; low volume, so they'd
+                      never survive the volume filter — hence a separate list from the base).
+    """
     tickers, _ = get_universe(NSE)
     history = screener.fetch_price_history(tickers, period="1y")
-    # Two-stage scan over all 500: technicals for all, fundamentals only for survivors.
-    result, _ = screener.scan_universe(tickers, history, screener.fetch_fundamentals)
-    return result  # default filters: P/E<20, vol>1.5x, RSI>50
+    base = screener.compute_base(tickers, history)
+
+    # Active setups: apply the volume/RSI filter, fetch fundamentals only for survivors.
+    survivors = [m for m in base if m["rsi"] > screener.RSI_MIN and m["volume_ratio"] > screener.VOLUME_MULTIPLE]
+    if survivors:
+        funds = screener.fetch_fundamentals([m["ticker"] for m in survivors])
+        for m in survivors:
+            f = funds.get(m["ticker"]) or {}
+            eps = f.get("eps")
+            m["sector"] = f.get("sector") or "—"
+            if eps and eps > 0:
+                m["pe"] = m["price"] / float(eps)
+    active = screener.screen_and_rank(survivors)
+
+    # Pre-breakout watch: tight base + (uptrend/turning up) + not weak. No volume requirement.
+    watch = [m for m in base
+             if m["breakout"] == "🎯 Tight base"
+             and m["trend"] in ("⬆️ Uptrend", "↗️ Turning up")
+             and m["rsi"] > 45]
+    watch.sort(key=lambda m: (m["range52"] if m["range52"] == m["range52"] else 0), reverse=True)
+    return active, watch[:10]
 
 
 def _name(ticker):
     return ticker.replace(".NS", "").replace(".BO", "")
 
 
-def _row(r):
-    return (f"• {_name(r['ticker'])}  ₹{r['price']:.1f} | P/E {r['pe']:.1f} | "
-            f"RSI {r['rsi']:.0f} | conv {int(r['conviction'])}/5")
+def _active_row(r):
+    return (f"• {_name(r['ticker'])}  ₹{r['price']:.1f} | RSI {r['rsi']:.0f} | "
+            f"conv {int(r['conviction'])}/5 | {r['trend']} {r['breakout']}")
 
 
-def format_message(res):
+def _watch_row(m):
+    return f"• {_name(m['ticker'])}  ₹{m['price']:.1f} | RSI {m['rsi']:.0f} | {m['trend']}"
+
+
+def format_message(active, watch):
     now = datetime.now(IST)
-    header = (f"📈 Morning Watchlist — {now:%a %d %b %Y}\n"
-              f"NSE • based on last close • NOT advice\n")
+    out = [f"📈 Morning Watchlist — {now:%a %d %b %Y}", "NSE • last close • NOT advice"]
 
-    if res is None or res.empty:
-        return header + "\nNo stocks passed the filters. Quiet setup — sit tight."
+    strong = active[active["signal"] == "🟢 Strong"] if active is not None and not active.empty else active
+    if strong is not None and not strong.empty:
+        out += [f"\n🟢 Strong now ({len(strong)}):"] + [_active_row(r) for _, r in strong.iterrows()]
+    elif active is not None and not active.empty:
+        out += ["\nNo 🟢 Strong today. Top active candidates:"]
+        out += [f"{r['signal']} " + _active_row(r) for _, r in active.head(5).iterrows()]
+    else:
+        out += ["\nNo active breakout setups today."]
 
-    strong = res[res["signal"] == "🟢 Strong"]
-    if not strong.empty:
-        lines = [f"\n🟢 Strong setups ({len(strong)}):"]
-        lines += [_row(r) for _, r in strong.iterrows()]
-        lines.append("\nWatch these at the 9:15 open. Confirm the chart & set a stop-loss.")
-        return header + "\n".join(lines)
+    if watch:
+        out += [f"\n🎯 Pre-breakout watch — coiling ({len(watch)}):"] + [_watch_row(m) for m in watch]
 
-    # No clean-strong names — show the top few candidates with their signal so it's never empty.
-    lines = ["\nNo 🟢 Strong (non-extended) setups today. Top candidates:"]
-    lines += [f"{r['signal']}  " + _row(r) for _, r in res.head(5).iterrows()]
-    return header + "\n".join(lines)
+    out.append("\nWatch at the 9:15 open. Confirm the chart & set a stop-loss.")
+    return "\n".join(out)
 
 
 def send_telegram(text):
@@ -67,5 +93,6 @@ def send_telegram(text):
 
 
 if __name__ == "__main__":
-    send_telegram(format_message(build_result()))
+    active, watch = build_lists()
+    send_telegram(format_message(active, watch))
     print("Digest sent.")

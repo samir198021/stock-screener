@@ -208,6 +208,16 @@ def _trend(price, ma20, ma50):
     return "➡️ Pausing"
 
 
+def compute_base(tickers, history):
+    """Technicals (no fundamentals) for every ticker that has enough history."""
+    base = []
+    for t in tickers:
+        m = compute_metrics(t, history.get(t), None)
+        if m:
+            base.append(m)
+    return base
+
+
 def scan_universe(tickers, history, fundamentals_fetcher,
                   pe_max=PE_MAX, vol_mult=VOLUME_MULTIPLE, rsi_min=RSI_MIN):
     """Efficient two-stage scan for large universes (e.g. Nifty 500).
@@ -219,12 +229,7 @@ def scan_universe(tickers, history, fundamentals_fetcher,
              This turns ~500 slow per-stock fundamental calls into just a handful.
     Returns (ranked_dataframe, scanned_count).
     """
-    base = []
-    for t in tickers:
-        m = compute_metrics(t, history.get(t), None)  # technicals only (pe=None)
-        if m:
-            base.append(m)
-
+    base = compute_base(tickers, history)
     survivors = [m for m in base if m["rsi"] > rsi_min and m["volume_ratio"] > vol_mult]
     if survivors:
         funds = fundamentals_fetcher([m["ticker"] for m in survivors]) or {}
