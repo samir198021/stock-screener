@@ -241,7 +241,21 @@ def scan_universe(tickers, history, fundamentals_fetcher,
                 m["pe"] = m["price"] / float(eps)
 
     result = screen_and_rank(survivors, pe_max, vol_mult, rsi_min)
-    return result, len(base)
+    watch = prebreakout_watch(base)
+    return result, len(base), watch
+
+
+def prebreakout_watch(base, limit=15):
+    """Tight-base coils in an uptrend — the pre-breakout watch. Derived from the full base
+    (they have low volume, so they never survive the volume-spike filter). Best-first by how
+    close they are to their 52-week high."""
+    watch = [m for m in base
+             if m.get("breakout") == "🎯 Tight base"
+             and m.get("trend") in ("⬆️ Uptrend", "↗️ Turning up")
+             and m.get("rsi", 0) > 45]
+    watch.sort(key=lambda m: m["range52"] if not np.isnan(m.get("range52", np.nan)) else 0,
+               reverse=True)
+    return watch[:limit]
 
 
 def _normalize(s: pd.Series) -> pd.Series:

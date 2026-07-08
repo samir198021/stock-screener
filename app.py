@@ -39,8 +39,8 @@ def run_screen(market_label, pe_max, vol_mult, rsi_min):
     history = cached_history(tuple(tickers))
     # Two-stage: technicals for all, fundamentals only for survivors (cached, sorted for cache hits).
     fetch_funds = lambda ts: cached_fundamentals(tuple(sorted(ts)))
-    result, scanned = screener.scan_universe(tickers, history, fetch_funds, pe_max, vol_mult, rsi_min)
-    return result, currency, scanned, len(tickers)
+    result, scanned, watch = screener.scan_universe(tickers, history, fetch_funds, pe_max, vol_mult, rsi_min)
+    return result, currency, scanned, len(tickers), watch
 
 
 @st.cache_data(ttl=60, show_spinner=False)
@@ -55,7 +55,7 @@ def run_screen_chartink(pe_max, vol_mult, rsi_min, top_n=50):
     Raises on Chartink failure so the caller can fall back to Yahoo."""
     rows = cached_chartink(rsi_min, vol_mult)
     if not rows:
-        return pd.DataFrame(), "₹", 0, 0
+        return pd.DataFrame(), "₹", 0, 0, None
 
     # Biggest movers first, capped so enrichment stays cheap.
     rows = sorted(rows, key=lambda r: r.get("per_chg") or 0, reverse=True)[:top_n]
@@ -81,7 +81,7 @@ def run_screen_chartink(pe_max, vol_mult, rsi_min, top_n=50):
 
     # Trust Chartink's near-live RSI/volume; only apply the P/E filter here.
     result = screener.screen_and_rank(metrics, pe_max, vol_mult, rsi_min, require_technicals=False)
-    return result, "₹", len(metrics), len(tickers)
+    return result, "₹", len(metrics), len(tickers), None  # no full-universe base -> no coil watch
 
 
 # ---------------------------------------------------------------------------
@@ -141,14 +141,14 @@ st.caption(
 with st.spinner("Fetching quotes…"):
     if use_chartink:
         try:
-            result, currency, scanned, total = run_screen_chartink(pe_max, vol_mult, rsi_min)
+            result, currency, scanned, total, watch = run_screen_chartink(pe_max, vol_mult, rsi_min)
             source = "Chartink (near-live NSE)"
         except Exception as e:
             st.warning(f"Chartink is unreachable right now — falling back to Yahoo (delayed). [{e}]")
-            result, currency, scanned, total = run_screen(market_label, pe_max, vol_mult, rsi_min)
+            result, currency, scanned, total, watch = run_screen(market_label, pe_max, vol_mult, rsi_min)
             source = "Yahoo (delayed ~15 min)"
     else:
-        result, currency, scanned, total = run_screen(market_label, pe_max, vol_mult, rsi_min)
+        result, currency, scanned, total, watch = run_screen(market_label, pe_max, vol_mult, rsi_min)
         source = "Yahoo (delayed ~15 min)"
 
 c1, c2, c3, c4 = st.columns(4)
@@ -232,3 +232,24 @@ else:
     )
 
     st.bar_chart(result.set_index("ticker")["score"])
+
+# --- Pre-breakout watch (coiling tight bases) — shown when we have a full-universe base (Yahoo). ---
+if watch:
+    with st.expander(f"🎯 Pre-breakout watch — coiling ({len(watch)})", expanded=False):
+        st.caption("Tight bases in an uptrend — **low volume, so they're NOT in the table above**. "
+                   "These are coiling early setups; watch for a breakout (they'd flip to 🔼/🚀 on volume).")
+        wdf = pd.DataFrame([
+            {"Ticker": m["ticker"], "Trend": m["trend"], f"Price ({currency})": round(m["price"], 2),
+             "RSI": round(m["rsi"], 1), "52W Range": m["range52"]}
+            for m in watch
+        ])
+        st.dataframe(
+            wdf, hide_index=True, use_container_width=True,
+            column_config={
+                "RSI": st.column_config.NumberColumn(format="%.1f"),
+                "52W Range": st.column_config.ProgressColumn(format="%.0f", min_value=0, max_value=100),
+            },
+        )
+elif use_chartink:
+    st.caption("💡 Switch India **Data source** to *Delayed (Yahoo)* to also see the 🎯 pre-breakout "
+               "(tight-base) watch — Chartink's near-live scan only covers volume-active names.")

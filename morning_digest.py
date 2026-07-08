@@ -39,13 +39,9 @@ def build_lists():
                 m["pe"] = m["price"] / float(eps)
     active = screener.screen_and_rank(survivors)
 
-    # Pre-breakout watch: tight base + (uptrend/turning up) + not weak. No volume requirement.
-    watch = [m for m in base
-             if m["breakout"] == "🎯 Tight base"
-             and m["trend"] in ("⬆️ Uptrend", "↗️ Turning up")
-             and m["rsi"] > 45]
-    watch.sort(key=lambda m: (m["range52"] if m["range52"] == m["range52"] else 0), reverse=True)
-    return active, watch[:10]
+    # Pre-breakout watch: tight-base coils in an uptrend (shared with the dashboard).
+    watch = screener.prebreakout_watch(base, limit=10)
+    return active, watch
 
 
 def _name(ticker):
