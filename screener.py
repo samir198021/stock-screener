@@ -144,9 +144,10 @@ def compute_metrics(ticker: str, hist: pd.DataFrame, fundamentals):
     ma50 = float(close.rolling(50).mean().iloc[-1]) if len(close) >= 50 else np.nan
     trend = _trend(price, ma20, ma50)
 
-    # Breakout: closing above a recent high (Donchian-style) — the robust, computable "pattern".
+    # Breakout / pre-breakout: closing above a recent high, or coiling in a tight base.
     highs = hist["High"].dropna() if "High" in hist else close
-    breakout = _breakout(price, highs, range52)
+    lows = hist["Low"].dropna() if "Low" in hist else close
+    breakout = _breakout(price, highs, lows, range52)
 
     return {
         "ticker": ticker,
@@ -163,14 +164,31 @@ def compute_metrics(ticker: str, hist: pd.DataFrame, fundamentals):
     }
 
 
-def _breakout(price, highs, range52):
-    """Robust breakout read: is today's price above the highest high of a recent window?
-    55-day = ~quarterly breakout (strongest), 20-day = ~monthly, else near the 52-week high."""
+def _breakout(price, highs, lows, range52):
+    """Breakout / pre-breakout read from daily highs & lows:
+      🚀 55D high  — closed above the ~quarterly high (strongest breakout)
+      🔼 20D high  — closed above the ~monthly high
+      🎯 Tight base — coiling: last ~10 days' range is tight AND has contracted vs the prior
+                      ~month, with price in the upper half of the base (a pre-breakout setup)
+      🏔️ Near 52wk hi — top 10% of the yearly range
+    """
     n = len(highs)
     if n >= 56 and price > float(highs.iloc[-56:-1].max()):
         return "🚀 55D high"
     if n >= 21 and price > float(highs.iloc[-21:-1].max()):
         return "🔼 20D high"
+
+    # Volatility-contraction base (Minervini VCP idea): recent range tight and narrowing.
+    if n >= 30 and len(lows) >= 30:
+        base_hi, base_lo = float(highs.iloc[-10:].max()), float(lows.iloc[-10:].min())
+        prior_hi, prior_lo = float(highs.iloc[-30:-10].max()), float(lows.iloc[-30:-10].min())
+        if base_lo > 0 and prior_lo > 0 and base_hi > base_lo:
+            base_range = (base_hi - base_lo) / base_lo * 100.0
+            prior_range = (prior_hi - prior_lo) / prior_lo * 100.0
+            near_top = price >= base_lo + 0.5 * (base_hi - base_lo)
+            if base_range <= 10.0 and base_range <= 0.7 * prior_range and near_top:
+                return "🎯 Tight base"
+
     if not np.isnan(range52) and range52 >= 90:
         return "🏔️ Near 52wk hi"
     return "—"

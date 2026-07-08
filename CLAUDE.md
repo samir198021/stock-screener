@@ -21,8 +21,8 @@ downtrend), so this column separates strong setups from weak ones.
 
 Output columns: rank, ticker, **Signal** (🟢/🟡/🔴/🟠), **Trend** (⬆️ Uptrend / ↗️ Turning up /
 ➡️ Pausing / ⬇️ Fading, from 20/50-DMA alignment), **Breakout** (🚀 55D high / 🔼 20D high /
-🏔️ near 52wk high — Donchian-style, not fragile named-pattern detection), sector, current price,
-P/E, volume ratio, RSI,
+🎯 Tight base = pre-breakout volatility-contraction coil / 🏔️ near 52wk high — Donchian + VCP,
+not fragile named-pattern detection), sector, current price, P/E, volume ratio, RSI,
 52-week range position, % vs 200-day MA, conviction, score, and a chart link.
 The extra columns are research aids (not part of the filter) to speed up due diligence.
 History is fetched over 1 year so the 52-week range and 200-day MA can be computed.

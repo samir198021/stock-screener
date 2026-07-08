@@ -198,9 +198,9 @@ else:
                 help="Direction from moving averages — ⬆️ Uptrend (price > 20-DMA > 50-DMA, going "
                      "strong), ↗️ Turning up, ➡️ Pausing, ⬇️ Fading (rolling over). Not a guarantee."),
             "Breakout": st.column_config.TextColumn(
-                help="Closing above a recent high — 🚀 55D high (broke a ~3-month high, strongest), "
-                     "🔼 20D high (~1-month), 🏔️ Near 52wk hi (top 10% of the year). Best when Vol× "
-                     "is high (real breakout, not a fake-out)."),
+                help="🚀 55D high (broke ~3-month high, strongest) · 🔼 20D high (~1-month) · "
+                     "🎯 Tight base (coiling, PRE-breakout — watch for the pop) · 🏔️ Near 52wk hi. "
+                     "Breakouts are most reliable when Vol× is high (real, not a fake-out)."),
             f"Price ({currency})": st.column_config.NumberColumn(format="%.2f"),
             "Chg %": st.column_config.NumberColumn(format="%+.2f%%", help="Today's price change (near-live, Chartink)."),
             "P/E": st.column_config.NumberColumn(format="%.2f"),
