@@ -11,6 +11,7 @@ from streamlit_autorefresh import st_autorefresh
 
 import chartink
 import screener
+from deep_dive_prompt import build_deep_dive_prompt
 from universe import MARKETS, get_universe
 
 INDIA_LABEL = "India (NSE Nifty 500)"
@@ -249,6 +250,22 @@ else:
     )
 
     st.bar_chart(result.set_index("ticker")["score"])
+
+    # --- Deep-dive research prompt: turn a screener hit into a ready-to-paste analyst-memo prompt. ---
+    with st.expander("📋 Deep-dive research prompt", expanded=False):
+        st.caption(
+            "Picks up where the screener leaves off: fills the 18-section institutional-memo "
+            "template (business model, peers, red flags, scenarios, valuation, etc.) for one "
+            "ticker below. Copy it into a Claude chat to get the full report — this app only "
+            "builds the prompt, it doesn't call an LLM itself."
+        )
+        dd_ticker = st.selectbox("Ticker", result["ticker"].tolist(), key="dd_ticker")
+        dd_sector = result.loc[result["ticker"] == dd_ticker, "sector"].iloc[0] if "sector" in result.columns else ""
+        dd_prompt = build_deep_dive_prompt(dd_ticker, dd_sector)
+        st.text_area("Prompt", dd_prompt, height=300, key="dd_prompt_box")
+        st.download_button(
+            "⬇️ Download as .md", dd_prompt, file_name=f"{dd_ticker}_deep_dive_prompt.md", mime="text/markdown",
+        )
 
 # --- Pre-breakout watch (coiling tight bases) — shown when we have a full-universe base (Yahoo). ---
 if watch:
