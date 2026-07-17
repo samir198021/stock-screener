@@ -9,8 +9,11 @@ import pandas as pd
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 
+import anthropic
+
 import chartink
 import screener
+from deep_dive import MissingAPIKeyError, run_deep_dive_analysis
 from deep_dive_prompt import build_deep_dive_prompt
 from universe import MARKETS, get_universe
 
@@ -251,21 +254,58 @@ else:
 
     st.bar_chart(result.set_index("ticker")["score"])
 
-    # --- Deep-dive research prompt: turn a screener hit into a ready-to-paste analyst-memo prompt. ---
-    with st.expander("📋 Deep-dive research prompt", expanded=False):
+    # --- Deep-dive research: turn a screener hit into a full analyst-memo report. ---
+    with st.expander("🧠 Deep-dive research", expanded=False):
         st.caption(
             "Picks up where the screener leaves off: fills the 18-section institutional-memo "
             "template (business model, peers, red flags, scenarios, valuation, etc.) for one "
-            "ticker below. Copy it into a Claude chat to get the full report — this app only "
-            "builds the prompt, it doesn't call an LLM itself."
+            "ticker and runs it live against Claude with web search enabled."
         )
         dd_ticker = st.selectbox("Ticker", result["ticker"].tolist(), key="dd_ticker")
         dd_sector = result.loc[result["ticker"] == dd_ticker, "sector"].iloc[0] if "sector" in result.columns else ""
         dd_prompt = build_deep_dive_prompt(dd_ticker, dd_sector)
-        st.text_area("Prompt", dd_prompt, height=300, key="dd_prompt_box")
-        st.download_button(
-            "⬇️ Download as .md", dd_prompt, file_name=f"{dd_ticker}_deep_dive_prompt.md", mime="text/markdown",
-        )
+
+        dd_tab_run, dd_tab_prompt = st.tabs(["Run analysis", "Copy prompt instead"])
+
+        with dd_tab_run:
+            st.caption(
+                "⚠️ Calls the Claude API with live web search — takes a few minutes and costs "
+                "real API credits (multiple searches + a long report at high effort). Requires "
+                "`ANTHROPIC_API_KEY` to be set in this app's environment."
+            )
+            if st.button(f"▶️ Run deep dive on {dd_ticker}", key="dd_run"):
+                with st.spinner(f"Researching {dd_ticker} — this can take a few minutes…"):
+                    try:
+                        report_md = run_deep_dive_analysis(dd_ticker, dd_sector)
+                        st.session_state["dd_report"] = report_md
+                        st.session_state["dd_report_ticker"] = dd_ticker
+                    except MissingAPIKeyError as e:
+                        st.error(str(e))
+                    except anthropic.AuthenticationError:
+                        st.error("Claude API rejected the key — check ANTHROPIC_API_KEY is valid.")
+                    except anthropic.RateLimitError:
+                        st.error("Rate limited by the Claude API — wait a bit and try again.")
+                    except anthropic.APIStatusError as e:
+                        st.error(f"Claude API error ({e.status_code}): {e.message}")
+                    except anthropic.APIConnectionError:
+                        st.error("Couldn't reach the Claude API — check your network connection.")
+
+            if st.session_state.get("dd_report") and st.session_state.get("dd_report_ticker") == dd_ticker:
+                st.markdown(st.session_state["dd_report"])
+                st.download_button(
+                    "⬇️ Download as .md",
+                    st.session_state["dd_report"],
+                    file_name=f"{dd_ticker}_deep_dive_report.md",
+                    mime="text/markdown",
+                    key="dd_download_report",
+                )
+
+        with dd_tab_prompt:
+            st.caption("Copy this into any Claude chat yourself instead of running it here.")
+            st.text_area("Prompt", dd_prompt, height=300, key="dd_prompt_box")
+            st.download_button(
+                "⬇️ Download as .md", dd_prompt, file_name=f"{dd_ticker}_deep_dive_prompt.md", mime="text/markdown",
+            )
 
 # --- Pre-breakout watch (coiling tight bases) — shown when we have a full-universe base (Yahoo). ---
 if watch:
