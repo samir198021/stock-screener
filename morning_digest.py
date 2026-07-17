@@ -11,10 +11,15 @@ from datetime import datetime, timedelta, timezone
 import requests
 
 import screener
+from fundamentals_research import MissingAPIKeyError, research_fundamentals
 from universe import get_universe
 
 NSE = "India (NSE Nifty 500)"
 IST = timezone(timedelta(hours=5, minutes=30))
+
+# Fundamentals research costs one Claude API call (with live web search) per ticker —
+# cap it so an unusually large Strong-list day doesn't quietly run up a large bill.
+MAX_FUNDAMENTALS_PER_DAY = 10
 
 
 def build_lists():
@@ -58,7 +63,39 @@ def _watch_row(m):
     return f"• {_name(m['ticker'])}  ₹{m['price']:.1f} | RSI {m['rsi']:.0f} | {m['trend']}"
 
 
-def format_message(active, watch):
+def _fundamentals_row(data):
+    return (f"• {_name(data['ticker'])}  {data.get('fundamentals_score', '—')}/100 | "
+            f"{data.get('valuation_tag', '—')} | {data.get('red_flag_count', 0)} red flag(s)")
+
+
+def build_fundamentals_section(active):
+    """Runs the condensed fundamentals scorecard on today's top Strong candidates (capped at
+    MAX_FUNDAMENTALS_PER_DAY to bound API spend). Returns None if the feature isn't configured
+    (no ANTHROPIC_API_KEY) or there's nothing to research — the technical digest still sends
+    either way, this section is additive.
+    """
+    if active is None or active.empty or not os.environ.get("ANTHROPIC_API_KEY"):
+        return None
+
+    strong = active[active["signal"] == "🟢 Strong"] if "signal" in active.columns else active
+    candidates = (strong if not strong.empty else active).head(MAX_FUNDAMENTALS_PER_DAY)
+
+    rows = []
+    for _, r in candidates.iterrows():
+        try:
+            data = research_fundamentals(r["ticker"], r.get("sector", ""))
+            rows.append(_fundamentals_row(data))
+        except MissingAPIKeyError:
+            return None
+        except Exception as e:
+            rows.append(f"• {_name(r['ticker'])}  fundamentals research failed ({type(e).__name__})")
+
+    if not rows:
+        return None
+    return [f"\n🔎 Fundamentals read (top {len(rows)}, 18-point live research):"] + rows
+
+
+def format_message(active, watch, fundamentals_section=None):
     now = datetime.now(IST)
     out = [f"📈 Morning Watchlist — {now:%a %d %b %Y}", "NSE • last close • NOT advice"]
 
@@ -73,6 +110,9 @@ def format_message(active, watch):
 
     if watch:
         out += [f"\n🎯 Pre-breakout watch — coiling ({len(watch)}):"] + [_watch_row(m) for m in watch]
+
+    if fundamentals_section:
+        out += fundamentals_section
 
     out.append("\nWatch at the 9:15 open. Confirm the chart & set a stop-loss.")
     return "\n".join(out)
@@ -91,5 +131,6 @@ def send_telegram(text):
 
 if __name__ == "__main__":
     active, watch = build_lists()
-    send_telegram(format_message(active, watch))
+    fundamentals_section = build_fundamentals_section(active)
+    send_telegram(format_message(active, watch, fundamentals_section))
     print("Digest sent.")

@@ -15,9 +15,10 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install deps
-        run: pip install yfinance pandas numpy requests
+        run: pip install yfinance pandas numpy requests anthropic
       - name: Send morning digest
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: python morning_digest.py
